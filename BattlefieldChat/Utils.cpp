@@ -3,70 +3,17 @@
 #include <codecvt>
 #include "Utils.h"
 
-void setTextAlignment(HWND hwnd, int intTextAlignment) {
-    LONG_PTR s;
-    LONG_PTR textalignment = GetWindowLongPtr(hwnd, GWL_STYLE);
-    if (textalignment != intTextAlignment) {
-        if (intTextAlignment == 0) {
-            s = GetWindowLongPtr(hwnd, GWL_STYLE);
-            s = s & ~(SS_LEFT);
-            SetWindowLongPtr(hwnd, GWL_STYLE, (LONG_PTR)s);
-        }
-        else if (intTextAlignment == 1) {
-            s = GetWindowLongPtr(hwnd, GWL_STYLE);
-            s = s & ~(SS_CENTER);
-            SetWindowLongPtr(hwnd, GWL_STYLE, (LONG_PTR)s);
-        }
-        else if (intTextAlignment == 2) {
-            s = GetWindowLongPtr(hwnd, GWL_STYLE);
-            s = s & ~(SS_RIGHT);
-            SetWindowLongPtr(hwnd, GWL_STYLE, (LONG_PTR)s);
-        }
-
-        textalignment = intTextAlignment;
-
-        if (textalignment == 0) {
-            s = GetWindowLongPtr(hwnd, GWL_STYLE);
-            s = s | (SS_LEFT);
-            SetWindowLongPtr(hwnd, GWL_STYLE, (LONG_PTR)s);
-        }
-        else if (textalignment == 1) {
-            s = GetWindowLongPtr(hwnd, GWL_STYLE);
-            s = s | (SS_CENTER);
-            SetWindowLongPtr(hwnd, GWL_STYLE, (LONG_PTR)s);
-        }
-        else if (textalignment == 2) {
-            s = GetWindowLongPtr(hwnd, GWL_STYLE);
-            s = s | (SS_RIGHT);
-            SetWindowLongPtr(hwnd, GWL_STYLE, (LONG_PTR)s);
-        }
-        SetWindowPos(hwnd, 0, 0, 0, 0, 0,
-            SWP_NOZORDER | SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_DRAWFRAME);
-    }
-}
-
-void ReportError(const char* CallingFunction) {
-    DWORD error = GetLastError();
-    LPVOID lpMsgBuf;
-    DWORD bufLen = FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-        FORMAT_MESSAGE_FROM_SYSTEM |
-        FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL,
-        error,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPTSTR)&lpMsgBuf,
-        0, NULL);
-
-    std::cout << "Error in " << CallingFunction << " : " << (wchar_t*)lpMsgBuf;
-}
-
 int getSystemTitleHeight() {
     return (GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CXPADDEDBORDER));
 }
 
 bool isFullscreenWindow(HWND window) {
-    return window == GetDesktopWindow() || window == GetShellWindow();
+    return false;
+    /* This fucking not work, detect borderless as fullscreen
+    QUERY_USER_NOTIFICATION_STATE state;
+    SHQueryUserNotificationState(&state);
+    return state == QUNS_BUSY || state == QUNS_RUNNING_D3D_FULL_SCREEN;
+    */
 }
 
 bool isBorderlessWindow(HWND window) {
@@ -103,13 +50,15 @@ std::wstring CHS2CHT(std::wstring sCht) {
     LCID lcidSrc = MAKELCID(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED), SORT_CHINESE_PRC);
     const int iNewLen = LCMapString(lcidSrc, LCMAP_TRADITIONAL_CHINESE, sCht.c_str(), sCht.length(), NULL, 0);
 
-    wchar_t sDst[91];
+    int bufferSize = iNewLen + 2;
+    wchar_t* sDst = new wchar_t[bufferSize];
     if (iNewLen > 0) {
         LCMapString(lcidSrc, LCMAP_TRADITIONAL_CHINESE, sCht.c_str(), sCht.length(), sDst, iNewLen);
     }
     sDst[iNewLen] = '\0';
-
+    
     std::wstring out = std::wstring(sDst);
+    delete[] sDst;
     return out;
 }
 
@@ -167,4 +116,65 @@ bool loadNtDll() {
 
 void freeNtDll() {
     FreeLibrary(hNtDll);
+}
+
+enum AccentState {
+    ACCENT_DISABLED = 0,
+    ACCENT_ENABLE_GRADIENT = 1,
+    ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
+    ACCENT_ENABLE_BLURBEHIND = 3,
+    ACCENT_INVALID_STATE = 4
+};
+struct AccentPolicy {
+    AccentState AccentState;
+    int AccentFlags;
+    int GradientColor;
+    int AnimationId;
+};
+enum WindowCompositionAttribute {
+    WCA_UNDEFINED = 0,
+    WCA_NCRENDERING_ENABLED = 1,
+    WCA_NCRENDERING_POLICY = 2,
+    WCA_TRANSITIONS_FORCEDISABLED = 3,
+    WCA_ALLOW_NCPAINT = 4,
+    WCA_CAPTION_BUTTON_BOUNDS = 5,
+    WCA_NONCLIENT_RTL_LAYOUT = 6,
+    WCA_FORCE_ICONIC_REPRESENTATION = 7,
+    WCA_EXTENDED_FRAME_BOUNDS = 8,
+    WCA_HAS_ICONIC_BITMAP = 9,
+    WCA_THEME_ATTRIBUTES = 10,
+    WCA_NCRENDERING_EXILED = 11,
+    WCA_NCADORNMENTINFO = 12,
+    WCA_EXCLUDED_FROM_LIVEPREVIEW = 13,
+    WCA_VIDEO_OVERLAY_ACTIVE = 14,
+    WCA_FORCE_ACTIVEWINDOW_APPEARANCE = 15,
+    WCA_DISALLOW_PEEK = 16,
+    WCA_CLOAK = 17,
+    WCA_CLOAKED = 18,
+    WCA_ACCENT_POLICY = 19,
+    WCA_FREEZE_REPRESENTATION = 20,
+    WCA_EVER_UNCLOAKED = 21,
+    WCA_VISUAL_OWNER = 22,
+    WCA_LAST = 23
+};
+struct WindowCompositionAttributeData {
+    WindowCompositionAttribute Attribute;
+    int* Data;
+    int SizeOfData;
+};
+
+typedef int* (*_SetWindowCompositionAttribute)(HWND hwnd, WindowCompositionAttributeData* data);
+void blurWindow(HWND window) {
+    HMODULE hUser = GetModuleHandle(L"user32.dll");
+    if (hUser) {
+        _SetWindowCompositionAttribute setWindowCompositionAttribute = (_SetWindowCompositionAttribute)GetProcAddress(hUser, "SetWindowCompositionAttribute");
+        if (setWindowCompositionAttribute) {
+            AccentPolicy accent = { ACCENT_ENABLE_BLURBEHIND,0, 0, 0 };
+            WindowCompositionAttributeData data;
+            data.Attribute = WCA_ACCENT_POLICY;
+            data.Data = reinterpret_cast<int*>(&accent);
+            data.SizeOfData = sizeof(accent);
+            setWindowCompositionAttribute(window, &data);
+        }
+    }
 }

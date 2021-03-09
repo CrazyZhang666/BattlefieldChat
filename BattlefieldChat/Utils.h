@@ -5,9 +5,6 @@
 
 #define REPORTERROR ReportError(__FUNCTION__)
 
-void setTextAlignment(HWND hwnd, int textalignment);
-void ReportError(const char* CallingFunction);
-
 int getSystemTitleHeight();
 
 bool isFullscreenWindow(HWND window);
@@ -21,6 +18,8 @@ std::wstring StrToWStr(std::string src);
 std::wstring ReplaceWCSWithPattern(__in const std::wstring& message, __in const std::wstring& pattern, __in const std::wstring& replace);
 
 void press(BYTE key, int delay);
+
+void blurWindow(HWND window);
 
 typedef LONG(NTAPI* _NtSuspendProcess) (IN HANDLE ProcessHandle);
 typedef LONG(NTAPI* _NtResumeProcess) (IN HANDLE ProcessHandle);
